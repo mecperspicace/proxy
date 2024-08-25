@@ -33,7 +33,7 @@ If the `config.json` file does not exist when the program is launched, a file wi
 1. Visite https://github.com/mecperspicace/proxy/releases and download the file corresponding to your operating system.
 2. Run the file and edit `config.json`
 
-### Compile from source
+### Run from source
 
 1. Make sure Go is installed on your system.
 2. Clone this repository with `git clone https://github.com/mecperspicace/proxy.git`.
