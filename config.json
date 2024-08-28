@@ -2,5 +2,6 @@
     "port": "8080",
     "username": "user",
     "password": "password",
-    "realm": "Proxy"
+    "realm": "Proxy",
+    "logfile": "logs/proxy.log"
 }
