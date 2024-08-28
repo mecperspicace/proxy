@@ -4,10 +4,6 @@
         {
             "username": "username",
             "password": "password"
-        },
-        {
-            "username": "pepsi",
-            "password": "pepsi"
         }
     ],
     "realm": "Proxy",

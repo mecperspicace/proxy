@@ -18,9 +18,14 @@ The program uses a `config.json` configuration file to define operating paramete
 ```json
 {
     "port": "8080",
-    "username": "username",
-    "password": "password",
-    "realm": "Proxy"
+    "users": [
+        {
+            "username": "username",
+            "password": "password"
+        }
+    ],
+    "realm": "Proxy",
+    "logfile": "logs/proxy.log"
 }
 ```
 
