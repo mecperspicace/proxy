@@ -52,7 +52,6 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Log the connection
 	logRequest(r, r.Host)
 
 	go transfer(destConn, clientConn)
@@ -73,7 +72,6 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Log the request
 	logRequest(req, req.URL.Host)
 
 	copyHeader(w.Header(), resp.Header)
@@ -166,7 +164,7 @@ func createDefaultConfigIfNotExist(filename string) error {
 			Username: "username",
 			Password: "password",
 			Realm:    "Proxy",
-			LogFile:  "proxy.log",
+			LogFile:  "logs/proxy.log",
 		}
 
 		file, err := os.Create(filename)
@@ -206,19 +204,16 @@ func logRequest(r *http.Request, destinationIP string) {
 }
 
 func initLogger(logFilePath string) error {
-	// Assurez-vous que le répertoire du fichier de log existe
 	logDir := filepath.Dir(logFilePath)
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory: %v", err)
 	}
 
-	// Ouvrez le fichier de log (le crée s'il n'existe pas)
 	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %v", err)
 	}
 
-	// Initialisez le logger
 	logger = log.New(logFile, "", 0)
 	log.Printf("Logging to: %s", logFilePath)
 
