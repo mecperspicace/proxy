@@ -16,12 +16,16 @@ import (
 	"time"
 )
 
+type User struct {
+    Username string `json:"username"`
+    Password string `json:"password"`
+}
+
 type Config struct {
-	Port     string `json:"port"`
-	Username string `json:"username"`
-	Password string `json:"password"`
-	Realm    string `json:"realm"`
-	LogFile  string `json:"logfile"`
+    Port     string `json:"port"`
+    Users    []User `json:"users"`
+    Realm    string `json:"realm"`
+    LogFile  string `json:"logfile"`
 }
 
 type LogEntry struct {
@@ -52,7 +56,7 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logRequest(r, r.Host)
+	log.Printf("New connection from %s", getClientIP(r))
 
 	go transfer(destConn, clientConn)
 	go transfer(clientConn, destConn)
@@ -87,39 +91,47 @@ func copyHeader(dst, src http.Header) {
 	}
 }
 
-func basicAuth(username, password, realm string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			auth := r.Header.Get("Proxy-Authorization")
-			if auth == "" {
-				w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
-				http.Error(w, "Proxy authentication required", http.StatusProxyAuthRequired)
-				return
-			}
+func basicAuth(users []User, realm string) func(http.Handler) http.Handler {
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            auth := r.Header.Get("Proxy-Authorization")
+            if auth == "" {
+                w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
+                http.Error(w, "Proxy authentication required", http.StatusProxyAuthRequired)
+                return
+            }
 
-			authParts := strings.SplitN(auth, " ", 2)
-			if len(authParts) != 2 || authParts[0] != "Basic" {
-				http.Error(w, "Invalid authentication format", http.StatusBadRequest)
-				return
-			}
+            authParts := strings.SplitN(auth, " ", 2)
+            if len(authParts) != 2 || authParts[0] != "Basic" {
+                http.Error(w, "Invalid authentication format", http.StatusBadRequest)
+                return
+            }
 
-			payload, _ := base64.StdEncoding.DecodeString(authParts[1])
-			pair := strings.SplitN(string(payload), ":", 2)
-			if len(pair) != 2 {
-				http.Error(w, "Invalid authentication format", http.StatusBadRequest)
-				return
-			}
+            payload, _ := base64.StdEncoding.DecodeString(authParts[1])
+            pair := strings.SplitN(string(payload), ":", 2)
+            if len(pair) != 2 {
+                http.Error(w, "Invalid authentication format", http.StatusBadRequest)
+                return
+            }
 
-			if subtle.ConstantTimeCompare([]byte(pair[0]), []byte(username)) != 1 ||
-				subtle.ConstantTimeCompare([]byte(pair[1]), []byte(password)) != 1 {
-				w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
-				http.Error(w, "Invalid username or password", http.StatusProxyAuthRequired)
-				return
-			}
+            authenticated := false
+            for _, user := range users {
+                if subtle.ConstantTimeCompare([]byte(pair[0]), []byte(user.Username)) == 1 &&
+                    subtle.ConstantTimeCompare([]byte(pair[1]), []byte(user.Password)) == 1 {
+                    authenticated = true
+                    break
+                }
+            }
 
-			next.ServeHTTP(w, r)
-		})
-	}
+            if !authenticated {
+                w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
+                http.Error(w, "Invalid username or password", http.StatusProxyAuthRequired)
+                return
+            }
+
+            next.ServeHTTP(w, r)
+        })
+    }
 }
 
 func loadConfig(filename string) (Config, error) {
@@ -161,8 +173,12 @@ func createDefaultConfigIfNotExist(filename string) error {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		defaultConfig := Config{
 			Port:     "8080",
-			Username: "username",
-			Password: "password",
+			Users: []User{
+                {
+                    Username: "username",
+                    Password: "password",
+                },
+            },
 			Realm:    "Proxy",
 			LogFile:  "logs/proxy.log",
 		}
@@ -244,7 +260,7 @@ func main() {
 		}
 	})
 
-	authenticatedHandler := basicAuth(config.Username, config.Password, config.Realm)(handler)
+	authenticatedHandler := basicAuth(config.Users, config.Realm)(handler)
 
 	server := &http.Server{
 		Addr:    ":" + config.Port,
@@ -254,6 +270,6 @@ func main() {
 		},
 	}
 
-	fmt.Printf("Start listening for requests on port %s\n", server.Addr)
+	log.Printf("Start listening for requests on port %s\n", server.Addr)
 	log.Fatal(server.ListenAndServe())
 }

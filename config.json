@@ -1,7 +1,15 @@
 {
     "port": "8080",
-    "username": "user",
-    "password": "password",
+    "users": [
+        {
+            "username": "username",
+            "password": "password"
+        },
+        {
+            "username": "pepsi",
+            "password": "pepsi"
+        }
+    ],
     "realm": "Proxy",
     "logfile": "logs/proxy.log"
 }
