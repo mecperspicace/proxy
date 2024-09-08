@@ -5,7 +5,7 @@ A fast, lightweight proxy written in Golang that supports authentication and cus
 ## Features
 
 - Proxy for HTTP and HTTPS requests
-- Basic authentication
+- Multi-user authentication
 - Customizable configuration via JSON file
 - Logging of incoming requests with client IP address
 - Management of HTTPS connections via tunneling
