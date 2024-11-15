@@ -23,9 +23,7 @@ The program uses a `config.json` configuration file to define operating paramete
             "username": "username",
             "password": "password"
         }
-    ],
-    "realm": "Proxy",
-    "logfile": "logs/proxy.log"
+    ]
 }
 ```
 
