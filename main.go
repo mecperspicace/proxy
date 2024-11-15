@@ -5,38 +5,24 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
+	"github.com/charmbracelet/log"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
 type User struct {
-    Username string `json:"username"`
-    Password string `json:"password"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 type Config struct {
-    Port     string `json:"port"`
-    Users    []User `json:"users"`
-    Realm    string `json:"realm"`
-    LogFile  string `json:"logfile"`
+	Port  string `json:"port"`
+	Users []User `json:"users"`
 }
-
-type LogEntry struct {
-	Timestamp     string `json:"timestamp"`
-	SourceIP      string `json:"source_ip"`
-	DestinationIP string `json:"destination_ip"`
-	Method        string `json:"method"`
-	URL           string `json:"url"`
-}
-
-var logger *log.Logger
 
 func handleTunneling(w http.ResponseWriter, r *http.Request) {
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
@@ -56,16 +42,29 @@ func handleTunneling(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("New connection from %s", getClientIP(r))
+	log.Info("New connection", "from", getClientIP(r))
 
 	go transfer(destConn, clientConn)
 	go transfer(clientConn, destConn)
 }
 
 func transfer(destination io.WriteCloser, source io.ReadCloser) {
-	defer destination.Close()
-	defer source.Close()
-	io.Copy(destination, source)
+	defer func(destination io.WriteCloser) {
+		err := destination.Close()
+		if err != nil {
+
+		}
+	}(destination)
+	defer func(source io.ReadCloser) {
+		err := source.Close()
+		if err != nil {
+
+		}
+	}(source)
+	_, err := io.Copy(destination, source)
+	if err != nil {
+		return
+	}
 }
 
 func handleHTTP(w http.ResponseWriter, req *http.Request) {
@@ -74,13 +73,21 @@ func handleHTTP(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
 
-	logRequest(req, req.URL.Host)
+		}
+	}(resp.Body)
 
 	copyHeader(w.Header(), resp.Header)
 	w.WriteHeader(resp.StatusCode)
-	io.Copy(w, resp.Body)
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		return
+	}
+
+	logRequest(req)
 }
 
 func copyHeader(dst, src http.Header) {
@@ -92,46 +99,46 @@ func copyHeader(dst, src http.Header) {
 }
 
 func basicAuth(users []User, realm string) func(http.Handler) http.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            auth := r.Header.Get("Proxy-Authorization")
-            if auth == "" {
-                w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
-                http.Error(w, "Proxy authentication required", http.StatusProxyAuthRequired)
-                return
-            }
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			auth := r.Header.Get("Proxy-Authorization")
+			if auth == "" {
+				w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
+				http.Error(w, "Proxy authentication required", http.StatusProxyAuthRequired)
+				return
+			}
 
-            authParts := strings.SplitN(auth, " ", 2)
-            if len(authParts) != 2 || authParts[0] != "Basic" {
-                http.Error(w, "Invalid authentication format", http.StatusBadRequest)
-                return
-            }
+			authParts := strings.SplitN(auth, " ", 2)
+			if len(authParts) != 2 || authParts[0] != "Basic" {
+				http.Error(w, "Invalid authentication format", http.StatusBadRequest)
+				return
+			}
 
-            payload, _ := base64.StdEncoding.DecodeString(authParts[1])
-            pair := strings.SplitN(string(payload), ":", 2)
-            if len(pair) != 2 {
-                http.Error(w, "Invalid authentication format", http.StatusBadRequest)
-                return
-            }
+			payload, _ := base64.StdEncoding.DecodeString(authParts[1])
+			pair := strings.SplitN(string(payload), ":", 2)
+			if len(pair) != 2 {
+				http.Error(w, "Invalid authentication format", http.StatusBadRequest)
+				return
+			}
 
-            authenticated := false
-            for _, user := range users {
-                if subtle.ConstantTimeCompare([]byte(pair[0]), []byte(user.Username)) == 1 &&
-                    subtle.ConstantTimeCompare([]byte(pair[1]), []byte(user.Password)) == 1 {
-                    authenticated = true
-                    break
-                }
-            }
+			authenticated := false
+			for _, user := range users {
+				if subtle.ConstantTimeCompare([]byte(pair[0]), []byte(user.Username)) == 1 &&
+					subtle.ConstantTimeCompare([]byte(pair[1]), []byte(user.Password)) == 1 {
+					authenticated = true
+					break
+				}
+			}
 
-            if !authenticated {
-                w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
-                http.Error(w, "Invalid username or password", http.StatusProxyAuthRequired)
-                return
-            }
+			if !authenticated {
+				w.Header().Set("Proxy-Authenticate", `Basic realm="`+realm+`"`)
+				http.Error(w, "Invalid username or password", http.StatusProxyAuthRequired)
+				return
+			}
 
-            next.ServeHTTP(w, r)
-        })
-    }
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 func loadConfig(filename string) (Config, error) {
@@ -140,7 +147,12 @@ func loadConfig(filename string) (Config, error) {
 	if err != nil {
 		return config, err
 	}
-	defer file.Close()
+	defer func(file *os.File) {
+		err := file.Close()
+		if err != nil {
+
+		}
+	}(file)
 
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&config)
@@ -172,22 +184,25 @@ func getClientIP(r *http.Request) string {
 func createDefaultConfigIfNotExist(filename string) error {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		defaultConfig := Config{
-			Port:     "8080",
+			Port: "8080",
 			Users: []User{
-                {
-                    Username: "username",
-                    Password: "password",
-                },
-            },
-			Realm:    "Proxy",
-			LogFile:  "logs/proxy.log",
+				{
+					Username: "username",
+					Password: "password",
+				},
+			},
 		}
 
 		file, err := os.Create(filename)
 		if err != nil {
 			return err
 		}
-		defer file.Close()
+		defer func(file *os.File) {
+			err := file.Close()
+			if err != nil {
+
+			}
+		}(file)
 
 		encoder := json.NewEncoder(file)
 		encoder.SetIndent("", "    ")
@@ -195,61 +210,26 @@ func createDefaultConfigIfNotExist(filename string) error {
 			return err
 		}
 
-		log.Printf("%s configuration file created with default values", filename)
+		log.Info("New configuration file created with default values", "filename", filename)
 	}
 
 	return nil
 }
 
-func logRequest(r *http.Request, destinationIP string) {
-	entry := LogEntry{
-		Timestamp:     time.Now().Format(time.RFC3339),
-		SourceIP:      getClientIP(r),
-		DestinationIP: destinationIP,
-		Method:        r.Method,
-		URL:           r.URL.String(),
-	}
-
-	jsonEntry, err := json.Marshal(entry)
-	if err != nil {
-		log.Printf("Error marshaling log entry: %v", err)
-		return
-	}
-
-	logger.Println(string(jsonEntry))
-}
-
-func initLogger(logFilePath string) error {
-	logDir := filepath.Dir(logFilePath)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return fmt.Errorf("failed to create log directory: %v", err)
-	}
-
-	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return fmt.Errorf("failed to open log file: %v", err)
-	}
-
-	logger = log.New(logFile, "", 0)
-	log.Printf("Logging to: %s", logFilePath)
-
-	return nil
+func logRequest(r *http.Request) {
+	log.Info("New requests", "from", getClientIP(r), "to", r.URL.String(), "method", r.Method)
 }
 
 func main() {
 	configFile := "config.json"
 
 	if err := createDefaultConfigIfNotExist(configFile); err != nil {
-		log.Fatalf("Error when creating configuration file : %v", err)
+		log.Fatal("Error when creating configuration file", "err", err)
 	}
 
 	config, err := loadConfig(configFile)
 	if err != nil {
-		log.Fatalf("Error while loading configuration : %v", err)
-	}
-
-	if err := initLogger(config.LogFile); err != nil {
-		log.Fatalf("Error initializing logger: %v", err)
+		log.Fatal("Error while loading configuration", "err", err)
 	}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -260,7 +240,7 @@ func main() {
 		}
 	})
 
-	authenticatedHandler := basicAuth(config.Users, config.Realm)(handler)
+	authenticatedHandler := basicAuth(config.Users, "proxy")(handler)
 
 	server := &http.Server{
 		Addr:    ":" + config.Port,
@@ -270,6 +250,6 @@ func main() {
 		},
 	}
 
-	log.Printf("Start listening for requests on port %s\n", server.Addr)
+	log.Info("Start listening for requests", "port", config.Port)
 	log.Fatal(server.ListenAndServe())
 }

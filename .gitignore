@@ -1,4 +1,5 @@
 build/
 logs/
+.idea/
 .DS_Store
 config.json
