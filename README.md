@@ -1,7 +1,5 @@
 # Proxy
 
----
-
 ![GitHub Release](https://img.shields.io/github/v/release/mecperspicace/proxy)
 ![GitHub License](https://img.shields.io/github/license/mecperspicace/proxy)
 ![GitHub last commit](https://img.shields.io/github/last-commit/mecperspicace/proxy)
