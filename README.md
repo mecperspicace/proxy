@@ -1,9 +1,9 @@
 # Proxy
 
 ![GitHub Release](https://img.shields.io/github/v/release/mecperspicace/proxy)
-![GitHub License](https://img.shields.io/github/license/mecperspicace/proxy)
-![GitHub last commit](https://img.shields.io/github/last-commit/mecperspicace/proxy)
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/mecperspicace/proxy/total)
+![GitHub License](https://img.shields.io/github/license/mecperspicace/proxy?color=%233889c4)
+![GitHub last commit](https://img.shields.io/github/last-commit/mecperspicace/proxy?color=%233889c4)
+![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/mecperspicace/proxy/total?color=%233889c4)
 
 
 A fast, lightweight proxy written in Golang that supports authentication and custom listening ports.
